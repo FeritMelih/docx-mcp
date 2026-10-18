@@ -6,6 +6,9 @@ from lxml import etree
 
 from .base import W14, W, _now_iso, _preserve
 
+# Run wrappers that are already a revision: delete_table_row leaves their runs alone.
+_REVISION_TAGS = {f"{W}ins", f"{W}del", f"{W}moveFrom", f"{W}moveTo"}
+
 
 class TablesMixin:
     """Table operations."""
@@ -16,11 +19,14 @@ class TablesMixin:
         tables = []
         for idx, tbl in enumerate(doc.iter(f"{W}tbl")):
             rows = []
-            for tr in tbl.findall(f"{W}tr"):
+            tracked_deleted = []
+            for i, tr in enumerate(tbl.findall(f"{W}tr")):
                 cells = []
                 for tc in tr.findall(f"{W}tc"):
                     cells.append(self._text(tc))
                 rows.append(cells)
+                if tr.find(f"{W}trPr/{W}del") is not None:
+                    tracked_deleted.append(i)
             col_count = len(rows[0]) if rows else 0
             tables.append(
                 {
@@ -28,6 +34,8 @@ class TablesMixin:
                     "row_count": len(rows),
                     "col_count": col_count,
                     "cells": rows,
+                    # Rows deleted with tracked changes: still counted until accept_changes.
+                    "tracked_deleted_rows": tracked_deleted,
                 }
             )
         return tables
@@ -270,10 +278,12 @@ class TablesMixin:
         del_el.set(f"{W}author", author)
         del_el.set(f"{W}date", now)
 
-        # Mark all runs in cells as deleted
+        # Mark all runs in cells as deleted, including runs nested in a hyperlink
         for tc in tr.findall(f"{W}tc"):
             for para in tc.findall(f"{W}p"):
-                for run_el in list(para.findall(f"{W}r")):
+                for run_el in list(para.iter(f"{W}r")):
+                    if run_el.getparent().tag in _REVISION_TAGS:
+                        continue
                     t_el = run_el.find(f"{W}t")
                     if t_el is None or not t_el.text:
                         continue

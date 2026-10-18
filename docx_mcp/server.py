@@ -259,6 +259,9 @@ def delete_table_row(
 ) -> str:
     """Delete a table row with tracked changes.
 
+    The row stays in the table (get_tables lists it in ``tracked_deleted_rows``) until
+    accept_changes removes it.
+
     Args:
         table_idx: Table index (0-based).
         row_idx: Row index to delete (0-based).
@@ -659,7 +662,7 @@ def delete_text(
 
 @mcp.tool()
 def accept_changes(author: str = "") -> str:
-    """Accept tracked changes — keep insertions, remove deletions.
+    """Accept tracked changes — keep insertions, remove deletions (a deleted table row goes whole).
 
     Args:
         author: If set, only accept changes by this author. Empty = all changes.
@@ -670,6 +673,8 @@ def accept_changes(author: str = "") -> str:
 @mcp.tool()
 def reject_changes(author: str = "") -> str:
     """Reject tracked changes — remove insertions, restore deleted text.
+
+    An inserted table row is removed whole.
 
     Args:
         author: If set, only reject changes by this author. Empty = all changes.

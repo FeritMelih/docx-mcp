@@ -246,3 +246,84 @@ class TestDeleteTableRow:
         server.close_document()
         with pytest.raises(RuntimeError, match="No document"):
             server.delete_table_row(0, 0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Tracked row lifecycle: accept/reject resolve WHOLE rows
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _add_hyperlink_run(row_idx: int, text: str) -> None:
+    """Append a run wrapped in a w:hyperlink to column B of a fixture row."""
+    from lxml import etree
+
+    from docx_mcp.document import W
+
+    doc = server._doc._trees["word/document.xml"]
+    tbl = next(doc.iter(f"{W}tbl"))
+    p = tbl.findall(f"{W}tr")[row_idx].findall(f"{W}tc")[1].find(f"{W}p")
+    link = etree.SubElement(p, f"{W}hyperlink")
+    link.set(f"{W}anchor", "target")
+    r = etree.SubElement(link, f"{W}r")
+    etree.SubElement(r, f"{W}t").text = text
+
+
+class TestTrackedRowLifecycle:
+    @pytest.fixture(autouse=True)
+    def _open(self, test_docx: Path):
+        server.open_document(str(test_docx))
+
+    def _table(self) -> dict:
+        return _j(server.get_tables())[0]
+
+    def test_delete_marks_the_run_inside_a_hyperlink(self):
+        _add_hyperlink_run(1, "(link)")
+        server.delete_table_row(0, 1)
+        assert self._table()["cells"][1] == ["", ""]
+
+    def test_accept_removes_a_deleted_row_that_holds_a_hyperlink(self):
+        _add_hyperlink_run(1, "(link)")
+        server.delete_table_row(0, 1)
+        server.accept_changes()
+        table = self._table()
+        assert table["row_count"] == 2
+        assert [row[0] for row in table["cells"]] == ["Header A", "Row 2 A"]
+        assert table["tracked_deleted_rows"] == []
+
+    def test_reject_restores_a_deleted_row(self):
+        _add_hyperlink_run(1, "(link)")
+        server.delete_table_row(0, 1)
+        server.reject_changes()
+        table = self._table()
+        assert table["row_count"] == 3
+        assert table["cells"][1] == ["Row 1 A", "Row 1 B(link)"]
+        assert table["tracked_deleted_rows"] == []
+
+    def test_get_tables_flags_a_tracked_deleted_row(self):
+        assert self._table()["tracked_deleted_rows"] == []
+        server.delete_table_row(0, 1)
+        assert self._table()["tracked_deleted_rows"] == [1]
+
+    def test_reject_removes_a_tracked_inserted_row(self):
+        server.add_table_row(0, cells=["New A", "New B"])
+        server.reject_changes()
+        table = self._table()
+        assert table["row_count"] == 3
+        assert ["New A", "New B"] not in table["cells"]
+
+    def test_accept_keeps_a_tracked_inserted_row(self):
+        server.add_table_row(0, cells=["New A", "New B"])
+        server.accept_changes()
+        server.reject_changes()  # nothing tracked is left for a reject to undo
+        table = self._table()
+        assert table["row_count"] == 4
+        assert table["cells"][-1] == ["New A", "New B"]
+
+    def test_accept_by_author_resolves_only_that_authors_rows(self):
+        server.delete_table_row(0, 1, author="Alice")
+        server.delete_table_row(0, 2, author="Bob")
+        server.accept_changes(author="Alice")
+        table = self._table()
+        assert table["row_count"] == 2
+        assert table["cells"][1] == ["", ""]
+        assert table["tracked_deleted_rows"] == [1]

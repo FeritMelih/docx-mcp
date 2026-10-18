@@ -171,6 +171,14 @@ class TracksMixin:
             return True
         return el.get(f"{W}author") == author
 
+    def _tracked_rows(self, doc: etree._Element, tag: str, author: str | None) -> list:
+        """Rows whose ``w:trPr`` carries a ``tag`` revision (w:ins / w:del) matching ``author``."""
+        return [
+            mark.getparent().getparent()
+            for mark in doc.iter(tag)
+            if mark.getparent().tag == f"{W}trPr" and self._matches_author(mark, author)
+        ]
+
     def accept_changes(
         self,
         *,
@@ -183,6 +191,11 @@ class TracksMixin:
         """
         doc = self._require("word/document.xml")
         count = 0
+
+        # Accept row deletions: remove the whole row, not just its w:trPr marker
+        for tr in self._tracked_rows(doc, f"{W}del", author):
+            tr.getparent().remove(tr)
+            count += 1
 
         # Accept insertions: unwrap w:ins (promote children)
         for ins in list(doc.iter(f"{W}ins")):
@@ -221,6 +234,11 @@ class TracksMixin:
         """
         doc = self._require("word/document.xml")
         count = 0
+
+        # Reject row insertions: remove the whole row, not just its w:trPr marker
+        for tr in self._tracked_rows(doc, f"{W}ins", author):
+            tr.getparent().remove(tr)
+            count += 1
 
         # Reject insertions: remove w:ins and its content entirely
         for ins in list(doc.iter(f"{W}ins")):
