@@ -268,14 +268,39 @@ class MarkdownConverter:
 
     def _render_list(self, token: dict, depth: int = 0) -> list[etree._Element]:
         """Render bullet or numbered list."""
-        ordered = token.get("attrs", {}).get("ordered", False)
-        num_id = "2" if ordered else "1"  # from numbering.xml: 1=bullet, 2=numbered
+        attrs = token.get("attrs", {})
+        ordered = attrs.get("ordered", False)
+        # from numbering.xml: 1=bullet, 2=numbered; each numbered list gets its own w:num
+        num_id = self._numbered_list_num(depth, attrs.get("start", 1)) if ordered else "1"
         result = []
         for item in token.get("children", []):
             item_type = item["type"]
             if item_type in ("list_item", "task_list_item"):
                 result.extend(self._render_list_item(item, num_id, depth))
         return result
+
+    def _numbered_list_num(self, ilvl: int, start: int) -> str:
+        """A new w:num over numId 2's definition whose level ``ilvl`` starts at ``start``.
+
+        Lists that share one w:num continue each other's count, so every numbered list gets its
+        own, which also carries the markdown list's start number (``3.`` starts at 3). A
+        template's own numbering.xml with no numId 2 keeps numId 2, as before."""
+        num_tree = self._doc._tree("word/numbering.xml")
+        nums = num_tree.findall(f"{W}num")
+        base = next((n for n in nums if n.get(f"{W}numId") == "2"), None)
+        if base is None:
+            return "2"
+        num_id = str(max(int(n.get(f"{W}numId", "0")) for n in nums) + 1)
+        num = etree.Element(f"{W}num")
+        num.set(f"{W}numId", num_id)
+        abstract = etree.SubElement(num, f"{W}abstractNumId")
+        abstract.set(f"{W}val", base.find(f"{W}abstractNumId").get(f"{W}val"))
+        override = etree.SubElement(num, f"{W}lvlOverride")
+        override.set(f"{W}ilvl", str(ilvl))
+        etree.SubElement(override, f"{W}startOverride").set(f"{W}val", str(start))
+        nums[-1].addnext(num)  # every w:num after the last, as the schema orders them
+        self._doc._mark("word/numbering.xml")
+        return num_id
 
     def _render_list_item(self, token: dict, num_id: str, depth: int) -> list[etree._Element]:
         """Render a single list item, handling nested lists and task items."""

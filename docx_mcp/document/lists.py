@@ -51,6 +51,9 @@ class ListsMixin:
         abstract.set(f"{W}abstractNumId", str(abs_id))
         lvl = etree.SubElement(abstract, f"{W}lvl")
         lvl.set(f"{W}ilvl", "0")
+        # OOXML's default w:start is 0: without it a numbered list counts from 0.
+        start = etree.SubElement(lvl, f"{W}start")
+        start.set(f"{W}val", "1")
         fmt = etree.SubElement(lvl, f"{W}numFmt")
         if style == "numbered":
             fmt.set(f"{W}val", "decimal")

@@ -359,15 +359,15 @@ _NUMBERING_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <w:lvl w:ilvl="8"><w:numFmt w:val="bullet"/><w:lvlText w:val="\u25aa"/><w:pPr><w:ind w:left="6480" w:hanging="360"/></w:pPr></w:lvl>
   </w:abstractNum>
   <w:abstractNum w:abstractNumId="1">
-    <w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="1"><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%2."/><w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="2"><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%3."/><w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="3"><w:numFmt w:val="decimal"/><w:lvlText w:val="%4."/><w:pPr><w:ind w:left="2880" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="4"><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%5."/><w:pPr><w:ind w:left="3600" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="5"><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%6."/><w:pPr><w:ind w:left="4320" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="6"><w:numFmt w:val="decimal"/><w:lvlText w:val="%7."/><w:pPr><w:ind w:left="5040" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="7"><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%8."/><w:pPr><w:ind w:left="5760" w:hanging="360"/></w:pPr></w:lvl>
-    <w:lvl w:ilvl="8"><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%9."/><w:pPr><w:ind w:left="6480" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%2."/><w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%3."/><w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="3"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%4."/><w:pPr><w:ind w:left="2880" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="4"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%5."/><w:pPr><w:ind w:left="3600" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="5"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%6."/><w:pPr><w:ind w:left="4320" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="6"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%7."/><w:pPr><w:ind w:left="5040" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="7"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%8."/><w:pPr><w:ind w:left="5760" w:hanging="360"/></w:pPr></w:lvl>
+    <w:lvl w:ilvl="8"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%9."/><w:pPr><w:ind w:left="6480" w:hanging="360"/></w:pPr></w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
   <w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>

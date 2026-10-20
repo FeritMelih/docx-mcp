@@ -134,6 +134,27 @@ class TestInlineFormatting:
         assert any('"not smart"' in (blank_doc._text(r) or "") for r in code_runs)
 
 
+def _numbering(doc: DocxDocument, p) -> tuple[str, int, str]:
+    """A list paragraph's (numId, first number, numFmt) as Word resolves them: the w:num's
+    startOverride for the paragraph's level, else the level's w:start (0 when it is absent)."""
+    num_pr = p.find(f"{W}pPr/{W}numPr")
+    num_id = num_pr.find(f"{W}numId").get(f"{W}val")
+    ilvl = num_pr.find(f"{W}ilvl").get(f"{W}val")
+    root = doc._trees["word/numbering.xml"]
+    num = next(n for n in root.findall(f"{W}num") if n.get(f"{W}numId") == num_id)
+    abs_id = num.find(f"{W}abstractNumId").get(f"{W}val")
+    abstract = next(
+        a for a in root.findall(f"{W}abstractNum") if a.get(f"{W}abstractNumId") == abs_id
+    )
+    lvl = next(lv for lv in abstract.findall(f"{W}lvl") if lv.get(f"{W}ilvl") == ilvl)
+    fmt = lvl.find(f"{W}numFmt").get(f"{W}val")
+    for override in num.findall(f"{W}lvlOverride"):
+        if override.get(f"{W}ilvl") == ilvl and override.find(f"{W}startOverride") is not None:
+            return num_id, int(override.find(f"{W}startOverride").get(f"{W}val")), fmt
+    start = lvl.find(f"{W}start")
+    return num_id, int(start.get(f"{W}val")) if start is not None else 0, fmt
+
+
 class TestLists:
     def test_bullet_list(self, blank_doc: DocxDocument):
         MarkdownConverter.convert(blank_doc, "- Item A\n- Item B\n- Item C")
@@ -151,9 +172,81 @@ class TestLists:
         paras = body.findall(f"{W}p")
         assert len(paras) == 2
         for p in paras:
-            num_pr = p.find(f"{W}pPr/{W}numPr")
-            assert num_pr is not None
-            assert num_pr.find(f"{W}numId").get(f"{W}val") == "2"
+            assert p.find(f"{W}pPr/{W}numPr") is not None
+        # One list, over the decimal definition, numbered from 1 (OOXML's default start is 0).
+        resolved = {_numbering(blank_doc, p) for p in paras}
+        assert len(resolved) == 1
+        ((num_id, start, fmt),) = resolved
+        assert num_id != "1"
+        assert (start, fmt) == (1, "decimal")
+
+    def test_each_numbered_list_restarts_at_one(self, blank_doc: DocxDocument):
+        md = "1. Passport\n2. Visa\n\nAnd from the employer:\n\n1. Offer letter\n2. Payroll"
+        MarkdownConverter.convert(blank_doc, md)
+        body = blank_doc._trees["word/document.xml"].find(f"{W}body")
+        paras = [p for p in body.findall(f"{W}p") if p.find(f"{W}pPr/{W}numPr") is not None]
+        assert len(paras) == 4
+        first, second = (
+            {_numbering(blank_doc, p) for p in paras[:2]},
+            {_numbering(blank_doc, p) for p in paras[2:]},
+        )
+        assert len(first) == len(second) == 1
+        ((first_id, first_start, _),) = first
+        ((second_id, second_start, _),) = second
+        assert first_id != second_id, "two lists sharing one w:num never restart"
+        assert first_start == second_start == 1
+
+    def test_a_numbered_list_keeps_its_markdown_start_number(self, blank_doc: DocxDocument):
+        MarkdownConverter.convert(blank_doc, "3. Third\n4. Fourth")
+        body = blank_doc._trees["word/document.xml"].find(f"{W}body")
+        resolved = {_numbering(blank_doc, p) for p in body.findall(f"{W}p")}
+        assert len(resolved) == 1
+        ((_, start, fmt),) = resolved
+        assert (start, fmt) == (3, "decimal")
+
+    def test_a_nested_numbered_list_restarts_under_each_item(self, blank_doc: DocxDocument):
+        md = "1. Employer\n   1. Offer letter\n2. Employee\n   1. Passport"
+        MarkdownConverter.convert(blank_doc, md)
+        body = blank_doc._trees["word/document.xml"].find(f"{W}body")
+        outer_a, inner_a, outer_b, inner_b = (
+            _numbering(blank_doc, p) for p in body.findall(f"{W}p")
+        )
+        assert outer_a == outer_b and outer_a[1:] == (1, "decimal")
+        assert inner_a[0] != inner_b[0], "each nested list is its own list"
+        assert inner_a[1:] == inner_b[1:] == (1, "lowerLetter")
+
+    def test_a_template_without_the_numbered_definition_keeps_num_id_2(self, tmp_path: Path):
+        """A template's own numbering.xml with no numId 2 is left alone: the list keeps the
+        numId it always had rather than a w:num over a definition that is not there."""
+        import zipfile
+
+        from tests.conftest import _build_fixture
+
+        template_dotx = tmp_path / "template.dotx"
+        _build_fixture(template_dotx)
+        with_num = tmp_path / "with_numbering.dotx"
+        numbering_xml = (
+            '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:abstractNum w:abstractNumId="99"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>'
+            '</w:lvl></w:abstractNum><w:num w:numId="99"><w:abstractNumId w:val="99"/></w:num>'
+            "</w:numbering>"
+        )
+        with (
+            zipfile.ZipFile(template_dotx, "r") as src,
+            zipfile.ZipFile(with_num, "w", zipfile.ZIP_DEFLATED) as dst,
+        ):
+            for item in src.infolist():
+                dst.writestr(item, src.read(item.filename))
+            dst.writestr("word/numbering.xml", numbering_xml)
+        doc = DocxDocument.create(str(tmp_path / "out.docx"), template_path=str(with_num))
+        MarkdownConverter.convert(doc, "1. First\n2. Second")
+        body = doc._trees["word/document.xml"].find(f"{W}body")
+        ids = {p.find(f"{W}pPr/{W}numPr/{W}numId").get(f"{W}val") for p in body.findall(f"{W}p")}
+        assert ids == {"2"}
+        assert [
+            n.get(f"{W}numId") for n in doc._trees["word/numbering.xml"].findall(f"{W}num")
+        ] == ["99"]
+        doc.close()
 
     def test_nested_list_3_levels(self, blank_doc: DocxDocument):
         md = "- Level 0\n  - Level 1\n    - Level 2"

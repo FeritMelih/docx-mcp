@@ -83,6 +83,19 @@ class TestCreateBlank:
             )
         doc.close()
 
+    def test_numbered_definition_starts_every_level_at_one(self, tmp_path: Path):
+        """OOXML's default w:start is 0, so a level without one numbers from 0."""
+        out = tmp_path / "new.docx"
+        doc = DocxDocument.create(str(out))
+        num_root = doc._trees["word/numbering.xml"]
+        numbered = next(
+            a for a in num_root.findall(f"{W}abstractNum") if a.get(f"{W}abstractNumId") == "1"
+        )
+        for lvl in numbered.findall(f"{W}lvl"):
+            assert lvl[0].tag == f"{W}start", "w:start comes first in a w:lvl"
+            assert lvl[0].get(f"{W}val") == "1"
+        doc.close()
+
     def test_returns_opened_document(self, tmp_path: Path):
         out = tmp_path / "new.docx"
         doc = DocxDocument.create(str(out))

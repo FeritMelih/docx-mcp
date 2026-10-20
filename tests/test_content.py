@@ -34,6 +34,23 @@ class TestAddList:
         result = _j(server.add_list(["00000004"], style="numbered"))
         assert result["paragraphs_updated"] == 1
 
+    def test_numbered_list_starts_at_one(self):
+        """OOXML's default w:start is 0, so a numbered level without one numbers from 0."""
+        from docx_mcp.document import W
+
+        result = _j(server.add_list(["00000004"], style="numbered"))
+        root = server._doc._trees["word/numbering.xml"]
+        num = next(
+            n for n in root.findall(f"{W}num") if n.get(f"{W}numId") == str(result["list_id"])
+        )
+        abs_id = num.find(f"{W}abstractNumId").get(f"{W}val")
+        abstract = next(
+            a for a in root.findall(f"{W}abstractNum") if a.get(f"{W}abstractNumId") == abs_id
+        )
+        lvl = abstract.find(f"{W}lvl")
+        assert lvl[0].tag == f"{W}start", "w:start comes first in a w:lvl"
+        assert lvl[0].get(f"{W}val") == "1"
+
     def test_bad_para_id(self):
         with pytest.raises(ValueError, match="not found"):
             server.add_list(["DEADBEEF"])
