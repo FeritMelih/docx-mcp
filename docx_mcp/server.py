@@ -632,6 +632,10 @@ def insert_text(
 ) -> str:
     """Insert text with Word track-changes markup (appears as a green underlined insertion in Word).
 
+    The new words take the formatting (font, size, bold/italic, colour) of the run they are
+    placed in: the run holding the position substring, or the paragraph's first text run for
+    "start" and its last text run for "end".
+
     Args:
         para_id: paraId of the target paragraph.
         text: Text to insert.

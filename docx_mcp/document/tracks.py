@@ -43,7 +43,13 @@ class TracksMixin:
         t = etree.SubElement(r, f"{W}t")
         _preserve(t, text)
 
+        # The inserted words take the formatting of the run they're placed in:
+        # the matched run, the first text run for 'start', the last otherwise.
+        text_runs = [el for el in para.findall(f"{W}r") if el.find(f"{W}t") is not None]
+        anchor = text_runs[-1] if text_runs else None
+
         if position == "start":
+            anchor = text_runs[0] if text_runs else None
             ppr = para.find(f"{W}pPr")
             if ppr is not None:
                 ppr.addnext(ins)
@@ -74,6 +80,7 @@ class TracksMixin:
                     ins.addnext(after_run)
                 else:
                     run_el.addnext(ins)
+                anchor = run_el
                 placed = True
                 break
 
@@ -83,11 +90,16 @@ class TracksMixin:
                     del_text = "".join(t.text for t in del_el.iter(f"{W}delText") if t.text)
                     if position in del_text:
                         del_el.addnext(ins)
+                        anchor = del_el.find(f"{W}r")
                         placed = True
                         break
 
             if not placed:
                 para.append(ins)
+
+        anchor_rpr = anchor.find(f"{W}rPr") if anchor is not None else None
+        if anchor_rpr is not None:
+            r.insert(0, etree.fromstring(etree.tostring(anchor_rpr)))
 
         self._mark("word/document.xml")
         return {"change_id": cid, "type": "insertion", "author": author, "date": now}

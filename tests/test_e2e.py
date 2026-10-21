@@ -337,6 +337,76 @@ class TestTrackChanges:
         r = _j(server.insert_text("00000002", "[START] ", position="start"))
         assert r["type"] == "insertion"
 
+    # ── insert_text keeps the surrounding formatting ────────────────────
+
+    _TIMES_ITALIC = (
+        f'<w:rPr xmlns:w="{W[1:-1]}">'
+        '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>'
+        '<w:i/><w:sz w:val="24"/><w:color w:val="1F3864"/></w:rPr>'
+    )
+
+    def _para(self, para_id: str):
+        body = server._doc._tree("word/document.xml").find(f"{W}body")
+        return server._doc._find_para(body, para_id)
+
+    def _make_times_italic(self, para_id: str):
+        """Give the paragraph's first run italic Times formatting."""
+        self._para(para_id).find(f"{W}r").insert(0, etree.fromstring(self._TIMES_ITALIC))
+
+    def _inserted_rpr(self, para_id: str):
+        return self._para(para_id).find(f"{W}ins/{W}r/{W}rPr")
+
+    def _assert_times_italic(self, rpr):
+        assert rpr is not None
+        assert rpr.find(f"{W}rFonts").get(f"{W}ascii") == "Times New Roman"
+        assert rpr.find(f"{W}i") is not None
+        assert rpr.find(f"{W}sz").get(f"{W}val") == "24"
+        assert rpr.find(f"{W}color").get(f"{W}val") == "1F3864"
+
+    def test_insert_mid_run_takes_the_runs_formatting(self):
+        self._make_times_italic("00000004")
+        server.insert_text("00000004", " (extended)", position="30 days")
+        self._assert_times_italic(self._inserted_rpr("00000004"))
+
+    def test_insert_after_run_end_takes_the_runs_formatting(self):
+        self._make_times_italic("00000004")
+        server.insert_text("00000004", " [ADDED]", position="effective date.")
+        self._assert_times_italic(self._inserted_rpr("00000004"))
+
+    def test_insert_after_deleted_text_takes_the_deleted_runs_formatting(self):
+        self._make_times_italic("00000004")
+        server.delete_text("00000004", "30 days")
+        server.insert_text("00000004", "60 days", position="30 days")
+        self._assert_times_italic(self._inserted_rpr("00000004"))
+
+    def test_insert_at_end_takes_the_last_text_runs_formatting(self):
+        """Paragraph 00000005 is bold text then an endnote-reference run: the text run wins."""
+        server.insert_text("00000005", " more")
+        rpr = self._inserted_rpr("00000005")
+        assert rpr.find(f"{W}b") is not None
+        assert rpr.find(f"{W}rStyle") is None
+
+    def test_insert_at_start_takes_the_first_text_runs_formatting(self):
+        server.insert_text("00000005", "Note: ", position="start")
+        assert self._inserted_rpr("00000005").find(f"{W}b") is not None
+
+    def test_insert_with_missing_substring_takes_the_last_text_runs_formatting(self):
+        server.insert_text("00000005", " [FALLBACK]", position="ZZZMISSING")
+        assert self._inserted_rpr("00000005").find(f"{W}b") is not None
+
+    def test_insert_at_boundary_takes_that_boundarys_run_not_another(self):
+        """Paragraph 00000006 is plain / bold / plain: both ends stay plain."""
+        server.insert_text("00000006", "[S] ", position="start")
+        server.insert_text("00000006", " [E]")
+        for ins in self._para("00000006").findall(f"{W}ins"):
+            assert ins.find(f"{W}r/{W}rPr") is None
+
+    def test_insert_into_unformatted_or_textless_para_adds_no_formatting(self):
+        # Plain text run; plain text then a footnote-reference run; an image-only run
+        for para_id in ("00000004", "00000002", "00000007"):
+            server.insert_text(para_id, " x")
+            assert self._inserted_rpr(para_id) is None
+
     # ── delete_text ─────────────────────────────────────────────────────
 
     def test_delete_text(self):
