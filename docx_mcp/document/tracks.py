@@ -196,7 +196,7 @@ class TracksMixin:
         *,
         author: str | None = None,
     ) -> dict:
-        """Accept tracked changes: keep insertions, remove deletions.
+        """Accept tracked changes: keep insertions, remove deletions, keep new formatting.
 
         Args:
             author: If set, only accept changes by this author.
@@ -229,6 +229,15 @@ class TracksMixin:
             del_el.getparent().remove(del_el)
             count += 1
 
+        # Accept formatting revisions: the new run / paragraph properties stay, and the record of
+        # the old ones goes (set_formatting writes w:rPrChange; Word writes w:pPrChange too).
+        for tag in ("rPrChange", "pPrChange"):
+            for change in list(doc.iter(f"{W}{tag}")):
+                if not self._matches_author(change, author):
+                    continue
+                change.getparent().remove(change)
+                count += 1
+
         if count > 0:
             self._mark("word/document.xml")
         scope = "by_author" if author else "all"
@@ -239,7 +248,7 @@ class TracksMixin:
         *,
         author: str | None = None,
     ) -> dict:
-        """Reject tracked changes: remove insertions, restore deletions.
+        """Reject tracked changes: remove insertions, restore deletions and old formatting.
 
         Args:
             author: If set, only reject changes by this author.
@@ -273,6 +282,31 @@ class TracksMixin:
                 parent.insert(idx, child)
                 idx += 1
             parent.remove(del_el)
+            count += 1
+
+        # Reject formatting revisions: put back the properties the revision recorded. A run's
+        # w:rPr becomes the old w:rPr whole; a paragraph's w:pPr takes the old properties back but
+        # keeps its paragraph-mark w:rPr and its w:sectPr, which a w:pPrChange never records.
+        for change in list(doc.iter(f"{W}rPrChange")):
+            if not self._matches_author(change, author):
+                continue
+            rpr = change.getparent()
+            old = change.find(f"{W}rPr")
+            for child in list(rpr):
+                rpr.remove(child)
+            for child in list(old) if old is not None else []:
+                rpr.append(child)
+            count += 1
+        for change in list(doc.iter(f"{W}pPrChange")):
+            if not self._matches_author(change, author):
+                continue
+            ppr = change.getparent()
+            old = change.find(f"{W}pPr")
+            for child in list(ppr):
+                if child.tag not in (f"{W}rPr", f"{W}sectPr"):
+                    ppr.remove(child)
+            for idx, child in enumerate(list(old) if old is not None else []):
+                ppr.insert(idx, child)
             count += 1
 
         if count > 0:

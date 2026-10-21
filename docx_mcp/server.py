@@ -666,7 +666,8 @@ def delete_text(
 
 @mcp.tool()
 def accept_changes(author: str = "") -> str:
-    """Accept tracked changes — keep insertions, remove deletions (a deleted table row goes whole).
+    """Accept tracked changes — keep insertions, remove deletions (a deleted table row goes whole),
+    and keep the new formatting of a formatting change.
 
     Args:
         author: If set, only accept changes by this author. Empty = all changes.
@@ -676,7 +677,8 @@ def accept_changes(author: str = "") -> str:
 
 @mcp.tool()
 def reject_changes(author: str = "") -> str:
-    """Reject tracked changes — remove insertions, restore deleted text.
+    """Reject tracked changes — remove insertions, restore deleted text, and put back the old
+    formatting of a formatting change.
 
     An inserted table row is removed whole.
 

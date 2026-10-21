@@ -50,6 +50,29 @@ class TestAcceptChanges:
         para4 = _j(server.get_paragraph("00000004"))
         assert "BY_ALICE" in para4["text"]
 
+    def test_accept_a_tracked_formatting_change(self):
+        """CF-040 F: a colour change made by set_formatting accepts to a plain red run, with no
+        formatting revision left behind (accept used to handle only w:ins / w:del)."""
+        from docx_mcp.document import W
+
+        server.set_formatting("00000004", "30 days", color="FF0000", author="Tester")
+        doc = server._doc._trees["word/document.xml"]
+        assert list(doc.iter(f"{W}rPrChange")), "set_formatting tracks the change"
+        result = _j(server.accept_changes())
+        assert result["accepted"] >= 1
+        assert list(doc.iter(f"{W}rPrChange")) == []
+        assert [c for c in doc.iter(f"{W}color") if c.get(f"{W}val") == "FF0000"]
+
+    def test_accept_by_author_leaves_another_authors_formatting_change(self):
+        from docx_mcp.document import W
+
+        server.set_formatting("00000004", "30 days", color="FF0000", author="Alice")
+        server.set_formatting("00000005", "Final", italic=True, author="Bob")
+        _j(server.accept_changes(author="Alice"))
+        doc = server._doc._trees["word/document.xml"]
+        left = [c.get(f"{W}author") for c in doc.iter(f"{W}rPrChange")]
+        assert left and set(left) == {"Bob"}
+
     def test_accept_no_document(self):
         server.close_document()
         with pytest.raises(RuntimeError, match="No document"):
@@ -90,6 +113,25 @@ class TestRejectChanges:
         # Alice's insertion rejected; Bob's insertion and deletion still tracked
         para4 = _j(server.get_paragraph("00000004"))
         assert "BY_ALICE" not in para4["text"]
+
+    def test_reject_a_tracked_formatting_change_restores_the_old_run(self):
+        """CF-040 F: rejecting a formatting revision puts back the run properties it recorded."""
+        from docx_mcp.document import W
+
+        # Paragraph 00000005's "Final" run is bold (<w:rPr><w:b/></w:rPr>).
+        server.set_formatting("00000005", "Final", italic=True, color="FF0000", author="Tester")
+        result = _j(server.reject_changes())
+        assert result["rejected"] >= 1
+        doc = server._doc._trees["word/document.xml"]
+        assert list(doc.iter(f"{W}rPrChange")) == []
+        assert not [c for c in doc.iter(f"{W}color") if c.get(f"{W}val") == "FF0000"]
+        for p in doc.iter(f"{W}p"):
+            if p.get("{http://schemas.microsoft.com/office/word/2010/wordml}paraId") == "00000005":
+                runs = [r for r in p.iter(f"{W}r") if "Final" in "".join(t.text or "" for t in r.iter(f"{W}t"))]
+                assert runs
+                rpr = runs[0].find(f"{W}rPr")
+                assert rpr is not None and rpr.find(f"{W}b") is not None
+                assert rpr.find(f"{W}i") is None
 
     def test_reject_no_document(self):
         server.close_document()
